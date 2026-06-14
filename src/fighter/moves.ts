@@ -69,3 +69,7 @@ export const MOVES: Record<Kind, [MoveDef, MoveDef, MoveDef]> = {
 };
 
 export const pick = (kind: Kind, tap: 1 | 2 | 3): MoveDef => MOVES[kind][tap - 1];
+
+// id → golpe (pra sincronizar animação na rede)
+export const MOVE_BY_ID: Record<string, MoveDef> = {};
+for (const k of Object.keys(MOVES) as Kind[]) for (const m of MOVES[k]) MOVE_BY_ID[m.id] = m;

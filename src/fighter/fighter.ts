@@ -1,6 +1,12 @@
 import { lerp, clamp, easeInCubic, easeOutCubic, Vec } from "../engine/math";
 import { Pose, solve, Bones } from "./skeleton";
-import { MoveDef, Kind } from "./moves";
+import { MoveDef, Kind, MOVE_BY_ID } from "./moves";
+
+// estado sincronizado de um lutador (online)
+export interface NetState {
+  x: number; hp: number; dir: 1 | -1; walk: number;
+  ko: 0 | 1; stun: 0 | 1; mv: string; mt: number; combo: number;
+}
 
 export interface FighterStats {
   power: number;   // multiplica dano
@@ -80,6 +86,52 @@ export class Fighter {
   // avança só o relógio de animação (preview idle, sem lógica de luta)
   advance(dt: number) {
     this.t += dt;
+  }
+
+  // ---------- rede ----------
+  netTargetX = 0;
+
+  netExport(): NetState {
+    const r = (v: number) => Math.round(v * 10) / 10;
+    return {
+      x: r(this.pos.x), hp: Math.round(this.hp), dir: this.dir,
+      walk: Math.round(this.walkX * 100) / 100,
+      ko: this.ko ? 1 : 0, stun: this.stunT > 0 ? 1 : 0,
+      mv: this.move ? this.move.id : "", mt: Math.round(this.mt * 1000) / 1000,
+      combo: this.comboCount,
+    };
+  }
+
+  // convidado: vira display do estado do host (sem rodar combate)
+  netApply(s: NetState) {
+    this.netTargetX = s.x;
+    this.hp = s.hp;
+    this.dir = s.dir;
+    this.walkX = s.walk;
+    this.ko = s.ko === 1;
+    this.stunT = s.stun === 1 ? 0.3 : 0;
+    this.comboCount = s.combo;
+    this.move = s.mv ? MOVE_BY_ID[s.mv] ?? null : null;
+    this.mt = s.mt;
+    this.impactFired = true; // não dispara combate no convidado
+  }
+
+  // avança animação no convidado entre snapshots (sem física/colisão)
+  tickDisplay(dt: number) {
+    this.t += dt;
+    if (this.move) { this.mt += dt; if (this.mt / this.move.dur >= 1) this.move = null; }
+    if (this.ko) this.koT += dt;
+  }
+
+  // aproxima pos.x do alvo de rede. mine=true → prevê localmente (responde na hora)
+  netInterp(dt: number, mine: boolean) {
+    const dx = this.netTargetX - this.pos.x;
+    if (Math.abs(dx) > 80) { this.pos.x = this.netTargetX; return; } // teleporte proposital
+    if (mine) {
+      this.pos.x += this.walkX * this.walkSpeed * dt + dx * (1 - Math.exp(-3.5 * dt));
+    } else {
+      this.pos.x += dx * (1 - Math.exp(-12 * dt));
+    }
   }
 
   private beginMove(m: MoveDef) {

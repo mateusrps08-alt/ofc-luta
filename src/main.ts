@@ -2,8 +2,9 @@ import { Loop } from "./engine/loop";
 import { TapCounter } from "./engine/input";
 import { GameFeel } from "./engine/gamefeel";
 import { Particles } from "./fx/particles";
-import { Fighter, MAX_HP } from "./fighter/fighter";
+import { Fighter, MAX_HP, NetState } from "./fighter/fighter";
 import { MOVES, Kind } from "./fighter/moves";
+import { NetLink } from "./net/netlink";
 import { resolveHit } from "./fighter/combat";
 import { drawFighter, SKINS } from "./render/renderer";
 import { drawArena } from "./arena/octagon";
@@ -81,10 +82,12 @@ function startFight(pData: FighterData, cpuData?: FighterData, online = false) {
   onlineMatch = online;
   const others = ROSTER.filter((f) => f.id !== pData.id);
   const cData = cpuData ?? others[Math.floor(Math.random() * others.length)];
+  netCleanup();
   player = new Fighter({ x: 0, y: groundY }, 1, pData.stats, pData.name, pData.skinId);
   cpu = new Fighter({ x: 0, y: groundY }, -1, cData.stats, cData.name, cData.skinId);
   placeFighters();
   ai = new AI(cpu, player, 0.5);
+  controlled = player;
   ready = false; over = false; overT = 0;
   timeLeft = ROUND_TIME;
   prevPHp = prevCHp = MAX_HP;
@@ -103,11 +106,145 @@ function endFight(title: string, winner: string, playerWon: boolean) {
 }
 let pendingEnd: { title: string; winner: string } | null = null;
 
+// ---------- NET (online ao vivo) ----------
+let net: NetLink | null = null;
+let netMode: "off" | "host" | "guest" = "off";
+let controlled: Fighter | null = null;
+let netSync = 0, netInWalk = 0, lastAppliedAtk = -1;
+let myAtkId = 0, myAtkKind: Kind = "soco", myAtkTap: 1 | 2 | 3 = 1;
+let netWinSide = "", netTitle = "", netWinner = "";
+
+const inputWalk = () => (joyWalk !== 0 ? joyWalk : keyWalk());
+
+function netCleanup() {
+  if (net) { net.destroy(); net = null; }
+  netMode = "off"; controlled = null;
+}
+
+function startNetFight(isHost: boolean) {
+  const h = roomData?.host, g = roomData?.guest;
+  if (!h || !g) return;
+  const hd = ROSTER[h.fighter], gd = ROSTER[g.fighter];
+  player = new Fighter({ x: 0, y: groundY }, 1, hd.stats, hd.name, hd.skinId);
+  cpu = new Fighter({ x: 0, y: groundY }, -1, gd.stats, gd.name, gd.skinId);
+  placeFighters();
+  ai = null;
+  netMode = isHost ? "host" : "guest";
+  controlled = isHost ? player : cpu;
+  onlineMatch = true;
+  ready = false; over = false; overT = 0; timeLeft = ROUND_TIME;
+  prevPHp = prevCHp = MAX_HP;
+  netSync = 0; netInWalk = 0; lastAppliedAtk = -1; myAtkId = 0;
+  netWinSide = ""; netTitle = ""; netWinner = "";
+  net = new NetLink(roomCode, isHost);
+  if (isHost) {
+    net.onInput = (i) => {
+      netInWalk = Number(i.walk) || 0;
+      const id = Number(i.atkId);
+      if (id > lastAppliedAtk && cpu) {
+        lastAppliedAtk = id;
+        cpu.attack(i.kind as Kind, Number(i.tap) as 1 | 2 | 3, MOVES);
+      }
+    };
+  } else {
+    net.onState = applyHostState;
+  }
+  ui.buildHud(hd, gd);
+  ui.updateHud(100, 100, 100, 100);
+  ui.setTimer(ROUND_TIME);
+  scene = "fight"; ui.scene("fight");
+  ui.roundIntro(() => { ready = true; });
+}
+
+function applyHostState(s: Record<string, unknown>) {
+  if (!player || !cpu) return;
+  if (s.p) player.netApply(s.p as NetState);
+  if (s.c) cpu.netApply(s.c as NetState);
+  if (typeof s.t === "number") timeLeft = s.t;
+  ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
+  if (s.over && !over) {
+    over = true; overT = 0;
+    pendingEnd = { title: String(s.title || "NOCAUTE!"), winner: String(s.winner || "") };
+    if (user) addResult(user.uid, s.win === "R").catch(() => {}); // convidado = lado R
+  }
+}
+
+function finishNet(title: string, hostWon: boolean) {
+  if (over) return;
+  over = true; overT = 0;
+  netTitle = title;
+  netWinSide = hostWon ? "L" : "R";
+  netWinner = hostWon ? player!.name : cpu!.name;
+  pendingEnd = { title, winner: netWinner };
+  if (user) addResult(user.uid, hostWon).catch(() => {}); // host = lado L
+}
+
+function sendSnapshot() {
+  if (!net || !player || !cpu) return;
+  net.sendState({
+    p: player.netExport(), c: cpu.netExport(),
+    t: Math.round(timeLeft * 10) / 10,
+    over: over ? 1 : 0, win: netWinSide, title: netTitle, winner: netWinner,
+  });
+}
+
+function netFightUpdate(dt: number) {
+  if (!player || !cpu) return;
+  fx.update(dt);
+  if (!ready) return;
+
+  if (netMode === "host") {
+    if (!feel.frozen()) {
+      player.walkX = inputWalk();
+      cpu.walkX = netInWalk;
+      const arenaMin = W * 0.1, arenaMax = W * 0.9, minSep = 95;
+      player.setBounds(arenaMin, cpu.pos.x - minSep);
+      cpu.setBounds(player.pos.x + minSep, arenaMax);
+      player.update(dt, (info) => resolveHit(player!, cpu!, info, feel, fx));
+      cpu.update(dt, (info) => resolveHit(cpu!, player!, info, feel, fx));
+      if (player.hp < prevPHp) ui.hitFlash("p");
+      if (cpu.hp < prevCHp) ui.hitFlash("c");
+      prevPHp = player.hp; prevCHp = cpu.hp;
+      ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
+      if (!over) {
+        timeLeft -= dt; ui.setTimer(timeLeft);
+        if (player.ko || cpu.ko) finishNet("NOCAUTE!", !player.ko);
+        else if (timeLeft <= 0) finishNet("TEMPO!", player.hp >= cpu.hp);
+      }
+    }
+    netSync += dt;
+    if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) { netSync = 0; sendSnapshot(); }
+  } else {
+    cpu.walkX = inputWalk(); // prevê o próprio
+    player.tickDisplay(dt); cpu.tickDisplay(dt);
+    player.netInterp(dt, false); cpu.netInterp(dt, true);
+    ui.setTimer(timeLeft);
+    netSync += dt;
+    if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) {
+      netSync = 0;
+      net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind: myAtkKind, tap: myAtkTap });
+    }
+  }
+
+  if (over) {
+    overT += dt;
+    if (overT > 1.6 && pendingEnd) {
+      const { title, winner } = pendingEnd; pendingEnd = null;
+      scene = "ko";
+      ui.showKO(title, winner, goOnline, goMenu);
+      ui.scene("ko");
+      netCleanup();
+    }
+  }
+}
+
 function update(dt: number) {
   feel.update(dt);
   if (scene === "menu") { attractUpdate(dt); return; }
-  if (scene === "select") return;
-  if (scene !== "fight" || !player || !cpu || !ai) return;
+  if (scene === "select" || scene === "career" || scene === "online") return;
+  if (scene !== "fight" || !player || !cpu) return;
+  if (netMode !== "off") { netFightUpdate(dt); return; }
+  if (!ai) return;
   fx.update(dt);
   if (!ready || feel.frozen()) return;
 
@@ -232,9 +369,21 @@ let roomCode = "", mySide: Online.Side = "host", roomUnsub: () => void = () => {
 let roomData: Online.Room | null = null, myFighter = 0;
 
 function onlineCleanup() {
+  netCleanup();
   roomUnsub(); roomUnsub = () => {};
   if (roomCode) Online.leaveRoom(roomCode, mySide).catch(() => {});
   roomCode = ""; roomData = null; onScene = "home";
+}
+
+// convidado entra na luta quando o host inicia
+function handleRoom(r: Online.Room | null) {
+  if (!r) { goOnline(); return; }
+  roomData = r;
+  if (r.status === "fighting" && scene === "online" && netMode === "off") {
+    startNetFight(false);
+    return;
+  }
+  if (scene === "online") renderOnline();
 }
 function goOnline() {
   onlineCleanup();
@@ -275,8 +424,10 @@ function renderOnline() {
       <p class="lead">compartilhe o código com seu amigo</p>
       <div class="players">${slot(me)}<div class="vs" style="color:var(--gold)">VS</div>${slot(opp)}</div>
       <button class="menu-btn" id="o-ready">${me?.ready ? "CANCELAR PRONTO" : "ESTOU PRONTO"}</button>
-      ${bothReady ? `<button class="menu-btn" id="o-start" style="background:linear-gradient(180deg,#1f9d4f,#0f6e33);box-shadow:0 6px 0 #0a4a22">LUTAR! <span class="chev">▸</span></button>` : ""}
-      <div class="note">Beta: você luta contra o personagem escolhido pelo rival. Sincronização ao vivo é o próximo passo.</div>
+      ${bothReady ? (mySide === "host"
+        ? `<button class="menu-btn" id="o-start" style="background:linear-gradient(180deg,#1f9d4f,#0f6e33);box-shadow:0 6px 0 #0a4a22">LUTAR! <span class="chev">▸</span></button>`
+        : `<div class="note">Os dois prontos! O host vai iniciar a luta.</div>`) : ""}
+      <div class="note">Beta: conexão ao vivo (P2P/Firebase). Host roda a luta, convidado controla seu lutador. Pode ter delay no celular.</div>
       <button class="sel-back" id="o-leave">◂ SAIR DA SALA</button></div>`;
     el.querySelector<HTMLElement>("#o-ready")!.addEventListener("click", () => {
       Online.setReady(roomCode, mySide, !me?.ready);
@@ -290,10 +441,7 @@ async function doCreate() {
   const code = await Online.createRoom(user!, myFighter);
   if (!code) { alert("Não foi possível criar a sala."); return; }
   roomCode = code; mySide = "host"; onScene = "room";
-  roomUnsub = Online.watchRoom(code, (r) => {
-    if (!r) { goOnline(); return; }
-    roomData = r; if (scene === "online") renderOnline();
-  });
+  roomUnsub = Online.watchRoom(code, handleRoom);
   renderOnline();
 }
 async function doJoin(code: string) {
@@ -301,23 +449,19 @@ async function doJoin(code: string) {
   if (res === "missing") { alert("Sala não encontrada."); return; }
   if (res === "full") { alert("Sala cheia."); return; }
   roomCode = code; mySide = "guest"; onScene = "room";
-  roomUnsub = Online.watchRoom(code, (r) => {
-    if (!r) { goOnline(); return; }
-    roomData = r; if (scene === "online") renderOnline();
-  });
+  roomUnsub = Online.watchRoom(code, handleRoom);
   renderOnline();
 }
 function startOnlineFight() {
-  const opp = mySide === "host" ? roomData?.guest : roomData?.host;
-  if (!opp) return;
-  roomUnsub(); roomUnsub = () => {};
-  startFight(ROSTER[myFighter], ROSTER[opp.fighter], true);
+  if (mySide !== "host") return;
+  Online.setStatus(roomCode, "fighting");
+  startNetFight(true);
 }
 function tryAttack(kind: Kind, tap: 1 | 2 | 3) {
-  if (scene === "fight" && ready && player) {
-    player.attack(kind, tap, MOVES);
-    ui.litAttack(kind);
-  }
+  if (scene !== "fight" || !ready) return;
+  ui.litAttack(kind);
+  if (netMode === "guest") { myAtkId++; myAtkKind = kind; myAtkTap = tap; return; }
+  controlled?.attack(kind, tap, MOVES);
 }
 
 let joyWalk = 0;
