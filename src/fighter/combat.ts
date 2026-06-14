@@ -1,0 +1,49 @@
+import { Vec } from "../engine/math";
+import { Fighter, ImpactInfo } from "./fighter";
+import { GameFeel } from "../engine/gamefeel";
+import { Particles } from "../fx/particles";
+
+const HEAD_R = 42;
+const BODY_R = 55;
+
+function dist(a: Vec, b: Vec) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export type HitResult = "hit" | "block" | "miss";
+
+// Resolve o impacto de `attacker` contra `defender`. Aplica dano/fx.
+export function resolveHit(
+  attacker: Fighter,
+  defender: Fighter,
+  info: ImpactInfo,
+  feel: GameFeel,
+  fx: Particles,
+): HitResult {
+  if (defender.ko) return "miss";
+  const target = info.move.height === "cabeca" ? defender.headPos() : defender.bodyPos();
+  const r = info.move.height === "cabeca" ? HEAD_R : BODY_R;
+  if (dist(info.at, target) > r) {
+    return "miss"; // errou (whiff) — sem fx
+  }
+
+  // dano = base * força do atacante * escala de combo
+  const damage = info.move.damage * attacker.stats.power * attacker.comboScale();
+
+  // chance de bloqueio (reduz dano, solta faísca)
+  const blocked = Math.random() < defender.stats.defense * 0.8;
+  defender.takeHit(info.move, attacker.dir, blocked, damage);
+
+  if (blocked) {
+    fx.block(target);
+    feel.freeze(0.03);
+    feel.shake(5, 0.12);
+    return "block";
+  }
+
+  attacker.registerComboHit();
+  fx.impact(target, info.move.power);
+  feel.freeze(0.045 + info.move.power * 0.07);
+  feel.shake(8 + info.move.power * 20, 0.28);
+  return "hit";
+}
