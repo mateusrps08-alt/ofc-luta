@@ -174,8 +174,8 @@ function startNetFight(isHost: boolean) {
 
 function applyHostState(s: Record<string, unknown>) {
   if (!player || !cpu) return;
-  if (s.p) player.netApply(s.p as NetState);       // lutador do host (oponente)
-  if (s.c) cpu.netApply(s.c as NetState, true);     // meu lutador: vida/ko do host, golpe local
+  if (s.p) player.netApply(s.p as NetState); // oponente (host)
+  if (s.c) cpu.netApply(s.c as NetState);    // meu lutador segue o host (liso, sem rubber-band)
   if (typeof s.t === "number") timeLeft = s.t;
   ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
   if (s.over && !over) {
@@ -231,10 +231,9 @@ function netFightUpdate(dt: number) {
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) { netSync = 0; sendSnapshot(); }
   } else {
-    cpu.walkX = inputWalk(); // prevê o próprio
+    // puro display: os dois lutadores seguem o estado do host (liso), só manda input
     player.tickDisplay(dt); cpu.tickDisplay(dt);
-    player.netInterp(dt, false); cpu.netInterp(dt, true);
-    cpu.pos.x = Math.max(WORLD_W * 0.1, Math.min(WORLD_W * 0.9, cpu.pos.x)); // não foge da tela
+    player.netInterp(dt, false); cpu.netInterp(dt, false);
     ui.setTimer(timeLeft);
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) {
@@ -496,7 +495,6 @@ function tryAttack(kind: Kind, tap: 1 | 2 | 3) {
   if (scene !== "fight" || !ready) return;
   ui.litAttack(kind);
   if (netMode === "guest") {
-    controlled?.attack(kind, tap, MOVES);   // previsão local (golpe sai na hora)
     myAtkId++; myAtkKind = kind; myAtkTap = tap;
     net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind, tap }); // manda já, sem esperar o tick
     return;

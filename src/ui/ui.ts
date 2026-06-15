@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.10 · BETA</div>`;
+      <div class="ver">v0.11 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
