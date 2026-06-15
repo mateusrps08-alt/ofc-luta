@@ -49,8 +49,11 @@ export class NetLink {
   private transmit(obj: Msg, fallback: ReturnType<typeof ref>) {
     obj.seq = this.sendSeq++;
     if (this.rtcOpen && this.dc?.readyState === "open") {
-      try { this.dc.send(JSON.stringify(obj)); return; } catch { this.rtcOpen = false; }
+      try { this.dc.send(JSON.stringify(obj)); } catch { this.rtcOpen = false; }
     }
+    // Sempre manda TAMBÉM pelo Firebase (canal confiável). O P2P pode reportar
+    // "open" de um lado e não entregar do outro (NAT da operadora / 5G), o que
+    // dava "SEM SINAL". O receptor deduplica por seq → nunca aplica em dobro.
     set(fallback, obj).catch(() => {});
   }
 
