@@ -102,13 +102,16 @@ export class Fighter {
     };
   }
 
-  // convidado: vira display do estado do host (sem rodar combate)
-  netApply(s: NetState) {
+  // convidado: vira display do estado do host (sem rodar combate).
+  // mine=true → é o lutador do próprio convidado: mantém move/walk LOCAIS
+  // (previsão), só aceita vida/ko/posição do host (autoritativo).
+  netApply(s: NetState, mine = false) {
     this.netTargetX = s.x;
     this.hp = s.hp;
+    this.ko = s.ko === 1;
+    if (mine) return;
     this.dir = s.dir;
     this.walkX = s.walk;
-    this.ko = s.ko === 1;
     this.stunT = s.stun === 1 ? 0.3 : 0;
     this.comboCount = s.combo;
     this.move = s.mv ? MOVE_BY_ID[s.mv] ?? null : null;

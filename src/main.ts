@@ -168,8 +168,8 @@ function startNetFight(isHost: boolean) {
 
 function applyHostState(s: Record<string, unknown>) {
   if (!player || !cpu) return;
-  if (s.p) player.netApply(s.p as NetState);
-  if (s.c) cpu.netApply(s.c as NetState);
+  if (s.p) player.netApply(s.p as NetState);       // lutador do host (oponente)
+  if (s.c) cpu.netApply(s.c as NetState, true);     // meu lutador: vida/ko do host, golpe local
   if (typeof s.t === "number") timeLeft = s.t;
   ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
   if (s.over && !over) {
@@ -481,7 +481,12 @@ function startOnlineFight() {
 function tryAttack(kind: Kind, tap: 1 | 2 | 3) {
   if (scene !== "fight" || !ready) return;
   ui.litAttack(kind);
-  if (netMode === "guest") { myAtkId++; myAtkKind = kind; myAtkTap = tap; return; }
+  if (netMode === "guest") {
+    controlled?.attack(kind, tap, MOVES);   // previsão local (golpe sai na hora)
+    myAtkId++; myAtkKind = kind; myAtkTap = tap;
+    net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind, tap }); // manda já, sem esperar o tick
+    return;
+  }
   controlled?.attack(kind, tap, MOVES);
 }
 
