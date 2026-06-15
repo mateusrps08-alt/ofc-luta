@@ -33,6 +33,8 @@ export const SKINS: Skin[] = [
   { body: "#b9875f", head: "#c5926a", trunks: "#c0561f", shortsAccent: "#14213a", shortsPattern: "split", glove: "#28407a", hair: "#221610", hairStyle: "short", outline: O },
   // Barbosa — pele morena, cacheado · short cinza com estrelas
   { body: "#a4744c", head: "#b07f55", trunks: "#34495e", shortsAccent: "#e74c3c", shortsPattern: "stars", glove: "#e74c3c", hair: "#19110a", hairStyle: "curly", hairVol: 1.45, outline: O },
+  // Martins — pele morena-clara, curto escuro · short azul-marinho listrado
+  { body: "#be8e5c", head: "#cb9a68", trunks: "#15294f", shortsAccent: "#f5d76e", shortsPattern: "stripe", glove: "#c0392b", hair: "#20160e", hairStyle: "short", outline: O },
 ];
 
 // desenha segmento como capsula grossa com contorno (estilo cartoon)

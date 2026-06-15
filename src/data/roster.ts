@@ -27,4 +27,6 @@ export const ROSTER: FighterData[] = [
     stats: { power: 1.00, speed: 1.18, defense: 0.27, chin: 0.70 } },
   { id: 7, name: "Barbosa", nick: "Rochedo", skinId: 7, photo: "/lutadores/barbosa.png",
     stats: { power: 1.00, speed: 1.18, defense: 0.27, chin: 0.70 } },
+  { id: 8, name: "Martins", nick: "Queixo de Ferro", skinId: 8, photo: "/lutadores/martins.png",
+    stats: { power: 1.22, speed: 1.18, defense: 0.15, chin: 0.80 } },
 ];
