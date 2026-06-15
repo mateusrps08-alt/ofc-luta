@@ -302,11 +302,22 @@ function update(dt: number) {
   }
 }
 
+// zoom da câmera: <1 afasta a visão (mantém o chão fixo). Paisagem afasta mais.
+function viewScale() {
+  const landscape = W > H;
+  return landscape ? 0.62 : 0.78;
+}
+
 function render() {
   if (scene === "select" || scene === "career" || scene === "online") return; // overlay opaco cobre o canvas
   ctx.save();
   ctx.translate(feel.shakeX, feel.shakeY);
   drawArena(ctx, W, H, groundY);
+  // afasta a câmera dos lutadores (pivô no centro do chão)
+  const v = viewScale();
+  ctx.translate(W / 2, groundY);
+  ctx.scale(v, v);
+  ctx.translate(-W / 2, -groundY);
   if (scene === "menu") {
     if (demoB) drawFighter(ctx, demoB.bones(), groundY, SKINS[demoB.skinId], demoB.wounds);
     if (demoA) drawFighter(ctx, demoA.bones(), groundY, SKINS[demoA.skinId], demoA.wounds);

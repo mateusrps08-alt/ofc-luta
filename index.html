@@ -123,7 +123,7 @@
     /* ---------- HUD ---------- */
     #hud { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-hud); display: none;
       align-items: flex-start; gap: var(--s3); pointer-events: none;
-      padding: calc(var(--s3) + var(--safe-t)) var(--s3) 0; }
+      padding: calc(var(--s3) + var(--safe-t)) max(var(--s3), env(safe-area-inset-right)) 0 max(var(--s3), env(safe-area-inset-left)); }
     #hud.on { display: flex; }
     .bar { flex: 1; min-width: 0; }
     .bar .row { display: flex; align-items: center; gap: 6px; margin-bottom: var(--s1); }
@@ -162,11 +162,11 @@
 
     /* ---------- CONTROLES ---------- */
     #controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: var(--z-controls); display: none;
-      align-items: flex-end; justify-content: space-between; gap: var(--s3);
-      padding: var(--s4) clamp(10px, 3vw, 32px) calc(var(--s4) + var(--safe-b)); }
+      align-items: flex-end; justify-content: space-between; gap: var(--s2);
+      padding: var(--s3) max(18px, env(safe-area-inset-right)) calc(var(--s3) + var(--safe-b)) max(22px, env(safe-area-inset-left)); }
     #controls.on { display: flex; }
-    .atk-cluster { display: flex; align-items: flex-end; gap: clamp(8px, 2.5vw, 16px); }
-    .joy { position: relative; width: clamp(112px, 32vw, 150px); aspect-ratio: 1; border-radius: 50%;
+    .atk-cluster { display: flex; align-items: flex-end; gap: clamp(6px, 2vw, 12px); }
+    .joy { position: relative; width: clamp(90px, 24vw, 128px); aspect-ratio: 1; border-radius: 50%;
       background: radial-gradient(circle at 50% 38%, rgba(60,76,116,.5), rgba(15,20,34,.62));
       border: 2px solid var(--line); touch-action: none; flex: none;
       box-shadow: inset 0 4px 18px rgba(0,0,0,.55); }
@@ -178,7 +178,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,.5), inset 0 2px 4px rgba(255,255,255,.22);
       transition: transform .12s var(--e-expo); will-change: transform; }
     .joy.active .knob { transition: none; }
-    .atk { position: relative; width: clamp(70px, 21vw, 100px); aspect-ratio: 1;
+    .atk { position: relative; width: clamp(56px, 17vw, 84px); aspect-ratio: 1;
       border-radius: 50%; border: none; color: #fff; overflow: hidden;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
       box-shadow: 0 6px 0 rgba(0,0,0,.42), 0 10px 22px rgba(0,0,0,.4);
@@ -200,7 +200,7 @@
       background: rgba(10,14,24,.72); color: var(--ink); font-size: 16px; font-weight: 900;
       display: none; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
     .topbtn.on { display: flex; }
-    #btn-info { right: var(--s3); }
+    #btn-info { right: max(var(--s3), env(safe-area-inset-right)); }
 
     /* ---------- ROUND CALL ---------- */
     #roundcall { position: absolute; inset: 0; z-index: var(--z-round); display: none; pointer-events: none;
@@ -300,9 +300,11 @@
       .rec-card { padding: var(--s3) var(--s2); }
       .rec-card .big { font-size: 38px; }
       .roomcode { font-size: 40px; }
-      .joy { width: clamp(80px, 27vh, 120px); }
-      .atk { width: clamp(56px, 18vh, 86px); }
-      .atk .ic { font-size: 22px; }
+      .joy { width: clamp(72px, 23vh, 110px); }
+      .atk { width: clamp(50px, 15vh, 74px); }
+      .atk .ic { font-size: 20px; }
+      .atk .nm { font-size: 11px; }
+      .atk .legend { font-size: 8px; }
       #controls { padding-bottom: calc(var(--s2) + var(--safe-b)); }
       .timer { font-size: 22px; }
     }
