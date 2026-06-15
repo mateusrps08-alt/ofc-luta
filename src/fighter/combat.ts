@@ -23,7 +23,14 @@ export function resolveHit(
   if (defender.ko) return "miss";
   const target = info.move.height === "cabeca" ? defender.headPos() : defender.bodyPos();
   const r = info.move.height === "cabeca" ? HEAD_R : BODY_R;
-  if (dist(info.at, target) > r) {
+  // O golpe é uma VARREDURA do corpo do atacante até o ponto de contato (a ponta),
+  // não só a ponta. Mede a distância do alvo ao SEGMENTO: assim soco/chute conecta
+  // mesmo coladinho (antes passava por cima por overshoot) e erra de verdade só
+  // quando o alvo está fora do alcance.
+  const lo = Math.min(attacker.pos.x, info.at.x);
+  const hi = Math.max(attacker.pos.x, info.at.x);
+  const sweep: Vec = { x: Math.max(lo, Math.min(hi, target.x)), y: info.at.y };
+  if (dist(sweep, target) > r) {
     return "miss"; // errou (whiff) — sem fx
   }
 
