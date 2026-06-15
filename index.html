@@ -206,6 +206,16 @@
     .topbtn.on { display: flex; }
     #btn-info { right: max(var(--s3), env(safe-area-inset-right)); }
 
+    /* ---------- CONTADOR DE COMBO ---------- */
+    #combo { position: absolute; top: 21%; left: 0; right: 0; z-index: var(--z-round);
+      text-align: center; font-family: var(--display); font-size: clamp(30px, 9vw, 60px);
+      color: var(--gold); letter-spacing: 2px; opacity: 0; pointer-events: none;
+      text-shadow: 0 2px 0 #7a4d00, 0 0 26px rgba(245,166,35,.65); }
+    #combo .x { color: #fff; font-size: .7em; }
+    #combo.show { animation: combopop .65s var(--e-expo); }
+    @keyframes combopop { 0% { transform: scale(1.7); opacity: 0; }
+      18% { opacity: 1; } 78% { opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+
     /* ---------- ROUND CALL ---------- */
     #roundcall { position: absolute; inset: 0; z-index: var(--z-round); display: none; pointer-events: none;
       align-items: center; justify-content: center; }
@@ -326,6 +336,7 @@
     <div id="hud"></div>
     <div id="dbg"></div>
     <button class="topbtn" id="btn-info" aria-label="Lista de golpes">?</button>
+    <div id="combo"></div>
     <div id="controls"></div>
     <div id="roundcall"></div>
     <div class="overlay" id="menu"></div>

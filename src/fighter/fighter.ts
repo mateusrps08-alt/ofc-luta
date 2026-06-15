@@ -5,7 +5,7 @@ import { MoveDef, Kind, MOVE_BY_ID } from "./moves";
 // estado sincronizado de um lutador (online)
 export interface NetState {
   x: number; hp: number; dir: 1 | -1; walk: number;
-  ko: 0 | 1; stun: 0 | 1; mv: string; mt: number; combo: number;
+  ko: 0 | 1; stun: 0 | 1; dodge: 0 | 1; mv: string; mt: number; combo: number;
 }
 
 export interface FighterStats {
@@ -60,10 +60,12 @@ export class Fighter {
 
   // movimento (analógico: -1..1)
   walkX = 0;
-  private vx = 0;          // velocidade de empurrão (decai)
+  private vx = 0;          // velocidade de empurrão/dash (decai)
   private walkSpeed: number;
+  private dashSpeed: number;
   private walkAmt = 0;     // 0..1 quanto da anim de passo está ativa
   private walkPhase = 0;
+  dodgeT = 0;              // tempo restante de esquiva (i-frames)
   minX = -1e9;
   maxX = 1e9;
 
@@ -71,7 +73,8 @@ export class Fighter {
     this.pos = { ...pos };
     this.baseX = pos.x;
     this.dir = dir;
-    this.walkSpeed = 250 * stats.speed;
+    this.walkSpeed = 300 * stats.speed;
+    this.dashSpeed = 900 * stats.speed;
   }
 
   setBounds(min: number, max: number) {
@@ -80,7 +83,28 @@ export class Fighter {
   }
 
   canWalk() {
-    return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && (this.move === null || this.impactFired);
+    return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && this.dodgeT <= 0 && (this.move === null || this.impactFired);
+  }
+
+  // GUARDA: segurar pra trás (longe do oponente) levanta a guarda.
+  // Derivada do walkX + dir → sincroniza no online de graça (o walk já vai na rede).
+  get guarding() {
+    return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && this.dodgeT <= 0
+      && this.move === null && Math.sign(this.walkX) === -this.dir && Math.abs(this.walkX) >= 0.45;
+  }
+
+  canDodge() {
+    return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && this.dodgeT <= 0 && this.stamina >= 18;
+  }
+
+  // ESQUIVA/DASH: arranco rápido com i-frames (esquiva golpe) na direção do mundo (dir +1 = direita).
+  dodge(dir: 1 | -1) {
+    if (!this.canDodge()) return false;
+    this.move = null; this.bufferedMove = null; this.impactFired = false;
+    this.dodgeT = 0.32;
+    this.vx = dir * this.dashSpeed;
+    this.stamina = clamp(this.stamina - 18, 0, 100);
+    return true;
   }
 
   // avança só o relógio de animação (preview idle, sem lógica de luta)
@@ -97,6 +121,7 @@ export class Fighter {
       x: r(this.pos.x), hp: Math.round(this.hp), dir: this.dir,
       walk: Math.round(this.walkX * 100) / 100,
       ko: this.ko ? 1 : 0, stun: this.stunT > 0 ? 1 : 0,
+      dodge: this.dodgeT > 0 ? 1 : 0,
       mv: this.move ? this.move.id : "", mt: Math.round(this.mt * 1000) / 1000,
       combo: this.comboCount,
     };
@@ -113,6 +138,7 @@ export class Fighter {
     this.dir = s.dir;
     this.walkX = s.walk;
     this.stunT = s.stun === 1 ? 0.3 : 0;
+    if (s.dodge === 1 && this.dodgeT <= 0) this.dodgeT = 0.32; // mostra a esquiva do oponente
     this.comboCount = s.combo;
     this.move = s.mv ? MOVE_BY_ID[s.mv] ?? null : null;
     this.mt = s.mt;
@@ -123,18 +149,24 @@ export class Fighter {
   tickDisplay(dt: number) {
     this.t += dt;
     if (this.move) { this.mt += dt; if (this.mt / this.move.dur >= 1) this.move = null; }
+    if (this.dodgeT > 0) this.dodgeT -= dt;
     if (this.ko) this.koT += dt;
   }
 
   // aproxima pos.x do alvo de rede. mine=true → previsão local autoritária
   netInterp(dt: number, mine: boolean) {
     const dx = this.netTargetX - this.pos.x;
-    if (Math.abs(dx) > 90) { this.pos.x = this.netTargetX; return; } // teleporte proposital
     if (mine) {
-      // anda pela previsão local; só corrige devagar quando diverge de verdade
-      this.pos.x += this.walkX * this.walkSpeed * dt;
-      if (Math.abs(dx) > 45) this.pos.x += dx * (1 - Math.exp(-2 * dt));
+      // arranco da esquiva (vx decai com atrito, igual ao host)
+      this.pos.x += this.vx * dt;
+      this.vx -= this.vx * Math.min(1, dt * 9);
+      // anda pela previsão local (bloqueado durante golpe/esquiva, igual ao host)
+      if (this.canWalk()) this.pos.x += this.walkX * this.walkSpeed * dt;
+      // só "teleporta" se desviar MUITO (recupera desync grande sem cortar a esquiva)
+      if (Math.abs(dx) > 130) { this.pos.x = this.netTargetX; this.vx = 0; }
+      else if (Math.abs(dx) > 45) this.pos.x += dx * (1 - Math.exp(-2 * dt));
     } else {
+      if (Math.abs(dx) > 90) { this.pos.x = this.netTargetX; return; } // teleporte proposital
       this.pos.x += dx * (1 - Math.exp(-12 * dt));
     }
   }
@@ -156,13 +188,13 @@ export class Fighter {
   }
 
   comboScale() {
-    return Math.max(0.5, 1 - this.comboCount * 0.08);
+    return Math.max(0.6, 1 - this.comboCount * 0.06);
   }
 
   registerComboHit() {
     if (this.comboTimer <= 0) this.comboCount = 0;
     this.comboCount++;
-    this.comboTimer = 0.8;
+    this.comboTimer = 1.1; // janela de combo mais generosa (ritmo)
   }
 
   attack(kind: Kind, tap: 1 | 2 | 3, table: Record<Kind, [MoveDef, MoveDef, MoveDef]>) {
@@ -259,6 +291,7 @@ export class Fighter {
     if (this.ko) { this.koT += dt; return; }
     if (this.hurtT > 0) this.hurtT -= dt;
     if (this.stunT > 0) this.stunT -= dt;
+    if (this.dodgeT > 0) this.dodgeT -= dt;
     if (this.comboTimer > 0) this.comboTimer -= dt; else this.comboCount = 0;
     this.stamina = clamp(this.stamina + dt * 12, 0, 100);
 
@@ -335,6 +368,21 @@ export class Fighter {
       p.backKnee += Math.max(0, -Math.sin(this.walkPhase)) * 0.2 * this.walkAmt;
       // avança (forward) = inclina pra frente; recua = pra trás
       p.torsoLean += Math.sign(this.walkX) * this.dir * 0.12 * this.walkAmt;
+    }
+
+    // guarda: braços na frente do rosto, tronco recuado
+    if (this.guarding) {
+      p.frontShoulder = 0.15; p.frontElbow = -2.45;
+      p.backShoulder = 0.4; p.backElbow = -2.55;
+      p.torsoLean = STANCE.torsoLean - 0.1;
+      p.headLean = STANCE.headLean - 0.04;
+    }
+
+    // esquiva: agacha e inclina no sentido do arranco
+    if (this.dodgeT > 0) {
+      const k = clamp(this.dodgeT / 0.32, 0, 1);
+      p.torsoLean += Math.sign(this.vx || this.dir) * this.dir * 0.3 * k;
+      p.squash = 0.9;
     }
 
     // reação: recuo ao apanhar
