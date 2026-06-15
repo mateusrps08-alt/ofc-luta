@@ -24,6 +24,11 @@ const fx = new Particles();
 
 const ROUND_TIME = 90;
 
+// mundo virtual FIXO: o gameplay roda nessas unidades em todo aparelho,
+// então host e convidado batem nas mesmas posições (sync online).
+const WORLD_W = 560; // largura virtual
+const GROUND = 520;  // y virtual dos pés
+
 let W = 0, H = 0, DPR = 1, groundY = 0;
 function resize() {
   const vv = window.visualViewport;
@@ -35,8 +40,7 @@ function resize() {
   canvas.width = Math.round(W * DPR);
   canvas.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  groundY = H * 0.8;
-  if (player && cpu) placeFighters();
+  groundY = H * 0.84; // chão da arena na tela (a arena é em px de tela)
   placeDemo();
 }
 window.addEventListener("resize", resize);
@@ -50,10 +54,10 @@ if (window.visualViewport) {
 let demoA: Fighter | null = null, demoB: Fighter | null = null;
 let demoTimer = 0.6;
 function placeDemo() {
-  if (!demoA) demoA = new Fighter({ x: 0, y: 0 }, 1, ROSTER[0].stats, ROSTER[0].name, ROSTER[0].skinId);
-  if (!demoB) demoB = new Fighter({ x: 0, y: 0 }, -1, ROSTER[1].stats, ROSTER[1].name, ROSTER[1].skinId);
-  demoA.pos = { x: W * 0.5 - 92, y: groundY };
-  demoB.pos = { x: W * 0.5 + 92, y: groundY };
+  if (!demoA) demoA = new Fighter({ x: 0, y: GROUND }, 1, ROSTER[0].stats, ROSTER[0].name, ROSTER[0].skinId);
+  if (!demoB) demoB = new Fighter({ x: 0, y: GROUND }, -1, ROSTER[1].stats, ROSTER[1].name, ROSTER[1].skinId);
+  demoA.pos = { x: WORLD_W / 2 - 75, y: GROUND };
+  demoB.pos = { x: WORLD_W / 2 + 75, y: GROUND };
 }
 function attractUpdate(dt: number) {
   if (!demoA || !demoB) return;
@@ -80,10 +84,9 @@ let prevPHp = MAX_HP, prevCHp = MAX_HP;
 let lastPlayerData: FighterData = ROSTER[0];
 
 function placeFighters() {
-  const gap = Math.min(W * 0.5, 170);
-  const cx = W / 2;
-  if (player) { player.baseX = cx - gap / 2; player.pos.x = player.baseX; player.pos.y = groundY; }
-  if (cpu) { cpu.baseX = cx + gap / 2; cpu.pos.x = cpu.baseX; cpu.pos.y = groundY; }
+  const gap = 170, cx = WORLD_W / 2;
+  if (player) { player.baseX = cx - gap / 2; player.pos.x = player.baseX; player.pos.y = GROUND; }
+  if (cpu) { cpu.baseX = cx + gap / 2; cpu.pos.x = cpu.baseX; cpu.pos.y = GROUND; }
 }
 
 let onlineMatch = false;
@@ -93,8 +96,8 @@ function startFight(pData: FighterData, cpuData?: FighterData, online = false) {
   const others = ROSTER.filter((f) => f.id !== pData.id);
   const cData = cpuData ?? others[Math.floor(Math.random() * others.length)];
   netCleanup();
-  player = new Fighter({ x: 0, y: groundY }, 1, pData.stats, pData.name, pData.skinId);
-  cpu = new Fighter({ x: 0, y: groundY }, -1, cData.stats, cData.name, cData.skinId);
+  player = new Fighter({ x: 0, y: GROUND }, 1, pData.stats, pData.name, pData.skinId);
+  cpu = new Fighter({ x: 0, y: GROUND }, -1, cData.stats, cData.name, cData.skinId);
   placeFighters();
   ai = new AI(cpu, player, 0.5);
   controlled = player;
@@ -135,8 +138,8 @@ function startNetFight(isHost: boolean) {
   const h = roomData?.host, g = roomData?.guest;
   if (!h || !g) return;
   const hd = ROSTER[h.fighter], gd = ROSTER[g.fighter];
-  player = new Fighter({ x: 0, y: groundY }, 1, hd.stats, hd.name, hd.skinId);
-  cpu = new Fighter({ x: 0, y: groundY }, -1, gd.stats, gd.name, gd.skinId);
+  player = new Fighter({ x: 0, y: GROUND }, 1, hd.stats, hd.name, hd.skinId);
+  cpu = new Fighter({ x: 0, y: GROUND }, -1, gd.stats, gd.name, gd.skinId);
   placeFighters();
   ai = null;
   netMode = isHost ? "host" : "guest";
@@ -207,7 +210,7 @@ function netFightUpdate(dt: number) {
     if (!feel.frozen()) {
       player.walkX = inputWalk();
       cpu.walkX = netInWalk;
-      const arenaMin = W * 0.1, arenaMax = W * 0.9, minSep = 95;
+      const arenaMin = WORLD_W * 0.1, arenaMax = WORLD_W * 0.9, minSep = 95;
       player.setBounds(arenaMin, cpu.pos.x - minSep);
       cpu.setBounds(player.pos.x + minSep, arenaMax);
       player.update(dt, (info) => resolveHit(player!, cpu!, info, feel, fx));
@@ -228,6 +231,7 @@ function netFightUpdate(dt: number) {
     cpu.walkX = inputWalk(); // prevê o próprio
     player.tickDisplay(dt); cpu.tickDisplay(dt);
     player.netInterp(dt, false); cpu.netInterp(dt, true);
+    cpu.pos.x = Math.max(WORLD_W * 0.1, Math.min(WORLD_W * 0.9, cpu.pos.x)); // não foge da tela
     ui.setTimer(timeLeft);
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) {
@@ -235,6 +239,8 @@ function netFightUpdate(dt: number) {
       net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind: myAtkKind, tap: myAtkTap });
     }
   }
+
+  if (net) ui.setNet(net.rtcOpen ? "P2P" : net.connWarn() ? "SEM SINAL" : "ONLINE");
 
   if (over) {
     overT += dt;
@@ -262,7 +268,7 @@ function update(dt: number) {
   player.walkX = joyWalk !== 0 ? joyWalk : keyWalk();
 
   // limites do octógono + não atravessar o oponente
-  const arenaMin = W * 0.1, arenaMax = W * 0.9, minSep = 95;
+  const arenaMin = WORLD_W * 0.1, arenaMax = WORLD_W * 0.9, minSep = 95;
   player.setBounds(arenaMin, cpu.pos.x - minSep);
   cpu.setBounds(player.pos.x + minSep, arenaMax);
 
@@ -302,29 +308,34 @@ function update(dt: number) {
   }
 }
 
-// zoom da câmera: <1 afasta a visão (mantém o chão fixo). Paisagem afasta mais.
-function viewScale() {
-  const landscape = W > H;
-  return landscape ? 0.62 : 0.78;
+// câmera mundo-virtual → tela: tamanho dos lutadores ~ proporcional à altura
+// (mesmo em qualquer tela), centrado no chão da arena. Posições são virtuais
+// (idênticas no host e convidado) → online sincroniza.
+function camScale() {
+  // limita pela altura (tamanho do lutador) e pela largura (cabe a área jogável)
+  return Math.min((H * 0.84) / GROUND, W / 520);
 }
 
 function render() {
   if (scene === "select" || scene === "career" || scene === "online") return; // overlay opaco cobre o canvas
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = "#05060c";
+  ctx.fillRect(0, 0, W, H);
   ctx.save();
   ctx.translate(feel.shakeX, feel.shakeY);
   drawArena(ctx, W, H, groundY);
-  // afasta a câmera dos lutadores (pivô no centro do chão)
-  const v = viewScale();
-  ctx.translate(W / 2, groundY);
-  ctx.scale(v, v);
-  ctx.translate(-W / 2, -groundY);
+
+  // câmera dos lutadores
+  const s = camScale();
+  ctx.translate(W / 2 - (WORLD_W / 2) * s, groundY - GROUND * s);
+  ctx.scale(s, s);
   if (scene === "menu") {
-    if (demoB) drawFighter(ctx, demoB.bones(), groundY, SKINS[demoB.skinId], demoB.wounds);
-    if (demoA) drawFighter(ctx, demoA.bones(), groundY, SKINS[demoA.skinId], demoA.wounds);
+    if (demoB) drawFighter(ctx, demoB.bones(), GROUND, SKINS[demoB.skinId], demoB.wounds);
+    if (demoA) drawFighter(ctx, demoA.bones(), GROUND, SKINS[demoA.skinId], demoA.wounds);
     fx.draw(ctx);
   } else if (player && cpu) {
-    drawFighter(ctx, cpu.bones(), groundY, SKINS[cpu.skinId], cpu.wounds);
-    drawFighter(ctx, player.bones(), groundY, SKINS[player.skinId], player.wounds);
+    drawFighter(ctx, cpu.bones(), GROUND, SKINS[cpu.skinId], cpu.wounds);
+    drawFighter(ctx, player.bones(), GROUND, SKINS[player.skinId], player.wounds);
     fx.draw(ctx);
   }
   ctx.restore();

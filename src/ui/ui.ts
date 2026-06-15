@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.8 · BETA</div>`;
+      <div class="ver">v0.9 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
@@ -156,8 +156,13 @@ export class UI {
       </div>`;
     this.hud.innerHTML =
       side("left", player, "p") +
-      `<div class="center-col"><div class="timer" id="timer">90</div><div class="round-ind">ROUND 1</div></div>` +
+      `<div class="center-col"><div class="timer" id="timer">90</div><div class="round-ind" id="net-ind">ROUND 1</div></div>` +
       side("right", cpu, "c");
+  }
+
+  setNet(txt: string) {
+    const e = document.getElementById("net-ind");
+    if (e) e.textContent = txt;
   }
 
   updateHud(pHp: number, pSt: number, cHp: number, cSt: number) {
