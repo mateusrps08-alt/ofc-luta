@@ -2,7 +2,7 @@ import { ref, set, onValue, off } from "firebase/database";
 import { db } from "./firebase";
 
 // Incrementar quando o formato do pacote mudar — os dois lados precisam bater.
-export const NET_VERSION = 1;
+export const NET_VERSION = 2;
 
 type Msg = Record<string, unknown> & { seq?: number };
 
