@@ -76,7 +76,17 @@ export class NetLink {
   private initRtc() {
     if (!db || typeof RTCPeerConnection === "undefined") return;
     try {
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          // TURN público (Open Relay): faz o P2P furar o NAT da operadora (4G/5G),
+          // onde só STUN não conecta -> tira o jogo do Firebase lento. Se o TURN
+          // estiver fora do ar, cai pro Firebase (continua funcionando, só mais lento).
+          { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+        ],
+      });
       this.pc = pc;
       const base = `rooms/${this.roomCode}/rtc`;
       const offerRef = ref(db, `${base}/offer`);

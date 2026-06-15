@@ -185,6 +185,11 @@ function applyHostState(s: Record<string, unknown>) {
   if (s.p) player.netApply(s.p as NetState);       // oponente (host): display puro
   if (s.c) cpu.netApply(s.c as NetState, true);    // meu lutador: vida/ko/posição do host, passo e golpe locais
   if (typeof s.t === "number") timeLeft = s.t;
+  // feedback de dano no convidado: o combate roda no host, então aqui a gente
+  // reage à queda de vida (flash na barra + faísca) pro golpe "sentir" que conectou.
+  if (player.hp < prevPHp) { ui.hitFlash("p"); fx.impact(player.headPos(), 0.7); }
+  if (cpu.hp < prevCHp) { ui.hitFlash("c"); fx.impact(cpu.headPos(), 0.7); }
+  prevPHp = player.hp; prevCHp = cpu.hp;
   ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
   if (s.over && !over) {
     over = true; overT = 0;
