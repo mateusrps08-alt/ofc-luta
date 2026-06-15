@@ -5,7 +5,7 @@ import { MoveDef, Kind, MOVE_BY_ID } from "./moves";
 // estado sincronizado de um lutador (online)
 export interface NetState {
   x: number; hp: number; dir: 1 | -1; walk: number;
-  ko: 0 | 1; stun: 0 | 1; dodge: 0 | 1; mv: string; mt: number; combo: number;
+  ko: 0 | 1; stun: 0 | 1; dodge: 0 | 1; guard: 0 | 1; mv: string; mt: number; combo: number;
 }
 
 export interface FighterStats {
@@ -66,6 +66,7 @@ export class Fighter {
   private walkAmt = 0;     // 0..1 quanto da anim de passo está ativa
   private walkPhase = 0;
   dodgeT = 0;              // tempo restante de esquiva (i-frames)
+  guardHeld = false;       // botão de defesa pressionado (setado pelo input/rede)
   minX = -1e9;
   maxX = 1e9;
 
@@ -86,11 +87,11 @@ export class Fighter {
     return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && this.dodgeT <= 0 && (this.move === null || this.impactFired);
   }
 
-  // GUARDA: segurar pra trás (longe do oponente) levanta a guarda.
-  // Derivada do walkX + dir → sincroniza no online de graça (o walk já vai na rede).
+  // GUARDA: botão de defesa segurado. Bloqueia se não estiver ko/atordoado/
+  // machucado/esquivando/golpeando. O estado (guardHeld) é sincronizado na rede.
   get guarding() {
-    return !this.ko && this.stunT <= 0 && this.hurtT <= 0 && this.dodgeT <= 0
-      && this.move === null && Math.sign(this.walkX) === -this.dir && Math.abs(this.walkX) >= 0.45;
+    return this.guardHeld && !this.ko && this.stunT <= 0 && this.hurtT <= 0
+      && this.dodgeT <= 0 && this.move === null;
   }
 
   canDodge() {
@@ -121,7 +122,7 @@ export class Fighter {
       x: r(this.pos.x), hp: Math.round(this.hp), dir: this.dir,
       walk: Math.round(this.walkX * 100) / 100,
       ko: this.ko ? 1 : 0, stun: this.stunT > 0 ? 1 : 0,
-      dodge: this.dodgeT > 0 ? 1 : 0,
+      dodge: this.dodgeT > 0 ? 1 : 0, guard: this.guarding ? 1 : 0,
       mv: this.move ? this.move.id : "", mt: Math.round(this.mt * 1000) / 1000,
       combo: this.comboCount,
     };
@@ -139,6 +140,7 @@ export class Fighter {
     this.walkX = s.walk;
     this.stunT = s.stun === 1 ? 0.3 : 0;
     if (s.dodge === 1 && this.dodgeT <= 0) this.dodgeT = 0.32; // mostra a esquiva do oponente
+    this.guardHeld = s.guard === 1; // mostra a guarda do oponente
     this.comboCount = s.combo;
     this.move = s.mv ? MOVE_BY_ID[s.mv] ?? null : null;
     this.mt = s.mt;
@@ -160,8 +162,8 @@ export class Fighter {
       // arranco da esquiva (vx decai com atrito, igual ao host)
       this.pos.x += this.vx * dt;
       this.vx -= this.vx * Math.min(1, dt * 9);
-      // anda pela previsão local (bloqueado durante golpe/esquiva, igual ao host)
-      if (this.canWalk()) this.pos.x += this.walkX * this.walkSpeed * dt;
+      // anda pela previsão local (bloqueado durante golpe/esquiva, lento na guarda)
+      if (this.canWalk()) this.pos.x += this.walkX * this.walkSpeed * (this.guarding ? 0.5 : 1) * dt;
       // só "teleporta" se desviar MUITO (recupera desync grande sem cortar a esquiva)
       if (Math.abs(dx) > 130) { this.pos.x = this.netTargetX; this.vx = 0; }
       else if (Math.abs(dx) > 45) this.pos.x += dx * (1 - Math.exp(-2 * dt));
@@ -276,8 +278,9 @@ export class Fighter {
     this.pos.x += this.vx * dt;
     this.vx -= this.vx * Math.min(1, dt * 9);
 
-    // andar (analógico), bloqueado durante golpe/atordoado/ko
-    const wx = this.canWalk() ? clamp(this.walkX, -1, 1) : 0;
+    // andar (analógico), bloqueado durante golpe/atordoado/ko; lento com a guarda
+    let wx = this.canWalk() ? clamp(this.walkX, -1, 1) : 0;
+    if (this.guarding) wx *= 0.5;
     const walking = Math.abs(wx) > 0.05;
     if (walking) {
       this.pos.x += wx * this.walkSpeed * dt;
