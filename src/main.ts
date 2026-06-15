@@ -244,6 +244,14 @@ function netFightUpdate(dt: number) {
 
   if (net) ui.setNet(net.rtcOpen ? "P2P" : net.connWarn() ? "SEM SINAL" : "ONLINE");
 
+  // painel de debug (diagnóstico do online)
+  if (player && cpu) {
+    const conn = net ? (net.rtcOpen ? "P2P" : net.connWarn() ? "SEMSINAL" : "RTDB") : "-";
+    const common = `t:${timeLeft.toFixed(0)} rdy:${ready ? 1 : 0}\npHP:${player.hp.toFixed(0)} cHP:${cpu.hp.toFixed(0)}\npX:${player.pos.x.toFixed(0)} cX:${cpu.pos.x.toFixed(0)}`;
+    if (netMode === "host") ui.setDbg(`HOST ${conn}\nrxAtk:${lastAppliedAtk} rxW:${netInWalk.toFixed(2)}\n${common}`);
+    else ui.setDbg(`GUEST ${conn}\ntxAtk:${myAtkId}\n${common}`);
+  }
+
   if (over) {
     overT += dt;
     if (overT > 1.6 && pendingEnd) {
@@ -343,8 +351,8 @@ function render() {
   ctx.restore();
 }
 
-function goMenu() { onlineCleanup(); scene = "menu"; ui.scene("menu"); }
-function goSelect() { scene = "select"; ui.scene("select"); }
+function goMenu() { onlineCleanup(); ui.setDbg(""); scene = "menu"; ui.scene("menu"); }
+function goSelect() { ui.setDbg(""); scene = "select"; ui.scene("select"); }
 
 // ---------- AUTH ----------
 let user: AppUser | null = null;
@@ -420,7 +428,7 @@ function handleRoom(r: Online.Room | null) {
   if (scene === "online") renderOnline();
 }
 function goOnline() {
-  onlineCleanup();
+  onlineCleanup(); ui.setDbg("");
   scene = "online"; ui.scene("online"); renderOnline();
 }
 function renderOnline() {

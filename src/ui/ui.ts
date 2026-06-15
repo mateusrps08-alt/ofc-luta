@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.11 · BETA</div>`;
+      <div class="ver">v0.12 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
@@ -163,6 +163,11 @@ export class UI {
   setNet(txt: string) {
     const e = document.getElementById("net-ind");
     if (e) e.textContent = txt;
+  }
+
+  setDbg(txt: string) {
+    const e = document.getElementById("dbg");
+    if (e) { e.textContent = txt; e.style.display = txt ? "block" : "none"; }
   }
 
   updateHud(pHp: number, pSt: number, cHp: number, cSt: number) {
