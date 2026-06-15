@@ -124,7 +124,10 @@ let net: NetLink | null = null;
 let netMode: "off" | "host" | "guest" = "off";
 let controlled: Fighter | null = null;
 let netSync = 0, netInWalk = 0, lastAppliedAtk = -1;
-let myAtkId = 0, myAtkKind: Kind = "soco", myAtkTap: 1 | 2 | 3 = 1;
+let myAtkId = 0;
+// fila dos últimos golpes do convidado; vai inteira em cada pacote de input.
+// reenviar a fila faz o golpe sobreviver a perda/coalescência de pacote (online).
+let atkQueue: { id: number; kind: Kind; tap: 1 | 2 | 3 }[] = [];
 let netWinSide = "", netTitle = "", netWinner = "";
 
 const inputWalk = () => {
@@ -150,16 +153,21 @@ function startNetFight(isHost: boolean) {
   onlineMatch = true;
   ready = false; over = false; overT = 0; timeLeft = ROUND_TIME;
   prevPHp = prevCHp = MAX_HP;
-  netSync = 0; netInWalk = 0; lastAppliedAtk = -1; myAtkId = 0;
+  netSync = 0; netInWalk = 0; lastAppliedAtk = -1; myAtkId = 0; atkQueue = [];
   netWinSide = ""; netTitle = ""; netWinner = "";
   net = new NetLink(roomCode, isHost);
   if (isHost) {
     net.onInput = (i) => {
       netInWalk = Number(i.walk) || 0;
-      const id = Number(i.atkId);
-      if (id > lastAppliedAtk && cpu) {
-        lastAppliedAtk = id;
-        cpu.attack(i.kind as Kind, Number(i.tap) as 1 | 2 | 3, MOVES);
+      // aplica todo golpe ainda não visto. a fila chega repetida a cada pacote,
+      // então mesmo perdendo pacote o host recupera o golpe que faltou.
+      const atks = Array.isArray(i.atks) ? (i.atks as { id: number; kind: Kind; tap: 1 | 2 | 3 }[]) : [];
+      for (const a of atks) {
+        const id = Number(a.id);
+        if (id > lastAppliedAtk && cpu) {
+          lastAppliedAtk = id;
+          cpu.attack(a.kind as Kind, Number(a.tap) as 1 | 2 | 3, MOVES);
+        }
       }
     };
   } else {
@@ -174,8 +182,8 @@ function startNetFight(isHost: boolean) {
 
 function applyHostState(s: Record<string, unknown>) {
   if (!player || !cpu) return;
-  if (s.p) player.netApply(s.p as NetState); // oponente (host)
-  if (s.c) cpu.netApply(s.c as NetState);    // meu lutador segue o host (liso, sem rubber-band)
+  if (s.p) player.netApply(s.p as NetState);       // oponente (host): display puro
+  if (s.c) cpu.netApply(s.c as NetState, true);    // meu lutador: vida/ko/posição do host, passo e golpe locais
   if (typeof s.t === "number") timeLeft = s.t;
   ui.updateHud((player.hp / MAX_HP) * 100, player.stamina, (cpu.hp / MAX_HP) * 100, cpu.stamina);
   if (s.over && !over) {
@@ -231,14 +239,17 @@ function netFightUpdate(dt: number) {
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) { netSync = 0; sendSnapshot(); }
   } else {
-    // puro display: os dois lutadores seguem o estado do host (liso), só manda input
+    // meu lutador (cpu) anda por previsão local (responde na hora); o oponente
+    // (player) segue o estado do host. assim o convidado se move na própria tela.
+    cpu.walkX = inputWalk();
     player.tickDisplay(dt); cpu.tickDisplay(dt);
-    player.netInterp(dt, false); cpu.netInterp(dt, false);
+    player.netInterp(dt, false); cpu.netInterp(dt, true);
+    cpu.pos.x = Math.max(WORLD_W * 0.1, Math.min(WORLD_W * 0.9, cpu.pos.x)); // não foge da arena
     ui.setTimer(timeLeft);
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) {
       netSync = 0;
-      net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind: myAtkKind, tap: myAtkTap });
+      net?.sendInput({ walk: inputWalk(), atks: atkQueue });
     }
   }
 
@@ -503,8 +514,11 @@ function tryAttack(kind: Kind, tap: 1 | 2 | 3) {
   if (scene !== "fight" || !ready) return;
   ui.litAttack(kind);
   if (netMode === "guest") {
-    myAtkId++; myAtkKind = kind; myAtkTap = tap;
-    net?.sendInput({ walk: inputWalk(), atkId: myAtkId, kind, tap }); // manda já, sem esperar o tick
+    controlled?.attack(kind, tap, MOVES);             // previsão local: golpe sai na hora na tela do convidado
+    myAtkId++;
+    atkQueue.push({ id: myAtkId, kind, tap });
+    if (atkQueue.length > 8) atkQueue.shift();         // guarda só os últimos golpes
+    net?.sendInput({ walk: inputWalk(), atks: atkQueue }); // manda já, sem esperar o tick
     return;
   }
   controlled?.attack(kind, tap, MOVES);
