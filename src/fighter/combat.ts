@@ -21,6 +21,7 @@ export function resolveHit(
   fx: Particles,
 ): HitResult {
   if (defender.ko) return "miss";
+  if (defender.dodgeT > 0) return "miss"; // esquivou: i-frames, golpe passa direto
   const target = info.move.height === "cabeca" ? defender.headPos() : defender.bodyPos();
   const r = info.move.height === "cabeca" ? HEAD_R : BODY_R;
   // O golpe é uma VARREDURA do corpo do atacante até o ponto de contato (a ponta),
@@ -37,8 +38,9 @@ export function resolveHit(
   // dano = base * força do atacante * escala de combo
   const damage = info.move.damage * attacker.stats.power * attacker.comboScale();
 
-  // chance de bloqueio (reduz dano, solta faísca)
-  const blocked = Math.random() < defender.stats.defense * 0.8;
+  // bloqueio: guarda ativa (segurar pra trás) bloqueia sempre; senão, chance passiva
+  // pela defesa do lutador. Guarda reduz muito o dano e corta o atordoamento.
+  const blocked = defender.guarding || Math.random() < defender.stats.defense * 0.25;
   defender.takeHit(info.move, attacker.dir, blocked, damage);
 
   if (blocked) {

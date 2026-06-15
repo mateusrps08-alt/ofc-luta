@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.16 · BETA</div>`;
+      <div class="ver">v0.17 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
@@ -94,7 +94,7 @@ export class UI {
     el.classList.remove("lit"); void el.offsetWidth; el.classList.add("lit");
   }
 
-  buildControls(onAttack: (kind: Kind, tap: 1 | 2 | 3) => void, onMove: (x: number) => void) {
+  buildControls(onAttack: (kind: Kind, tap: 1 | 2 | 3) => void, onMove: (x: number) => void, onDodge: (dir: 1 | -1) => void) {
     const atk = (k: Kind, name: string, legend: string) =>
       `<button class="atk ${CLS[k]}" id="atk-${CLS[k]}" aria-label="${name}">
         <span class="ring"></span><span class="ic">${ICON[k]}</span>
@@ -110,13 +110,13 @@ export class UI {
     };
     wire("soco"); wire("chute"); wire("cotovelada");
 
-    this.wireJoystick(onMove);
+    this.wireJoystick(onMove, onDodge);
   }
 
-  private wireJoystick(onMove: (x: number) => void) {
+  private wireJoystick(onMove: (x: number) => void, onDodge: (dir: 1 | -1) => void) {
     const base = $("joy");
     const knob = $("joy-knob");
-    let active = false, cx = 0, cy = 0, R = 1;
+    let active = false, cx = 0, cy = 0, R = 1, lastTap = 0;
 
     const start = (e: PointerEvent) => {
       active = true;
@@ -125,6 +125,11 @@ export class UI {
       cx = r.left + r.width / 2; cy = r.top + r.height / 2;
       R = r.width * 0.32;
       base.setPointerCapture(e.pointerId);
+      // duplo-toque na lateral do joystick = esquiva pra aquele lado
+      const now = performance.now();
+      const ddx = e.clientX - cx;
+      if (now - lastTap < 280 && Math.abs(ddx) > R * 0.3) onDodge(ddx > 0 ? 1 : -1);
+      lastTap = now;
       move(e);
     };
     const move = (e: PointerEvent) => {
@@ -199,6 +204,22 @@ export class UI {
     el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit");
   }
 
+  // contador de combo (do lutador controlado). Mostra a partir de 2 acertos seguidos.
+  setCombo(n: number) {
+    const el = document.getElementById("combo");
+    if (!el) return;
+    if (n >= 2) {
+      if (el.dataset.n !== String(n)) {
+        el.textContent = `${n}  HITS`;
+        el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+        el.dataset.n = String(n);
+      }
+    } else if (el.dataset.n) {
+      el.classList.remove("show");
+      el.dataset.n = "";
+    }
+  }
+
   roundIntro(onDone: () => void) {
     const show = (txt: string) => { this.roundcall.innerHTML = `<div class="rc">${txt}</div>`; };
     this.toggle(this.roundcall, true);
@@ -229,6 +250,9 @@ export class UI {
     this.moves.innerHTML = `<div class="sheet">
       <h3>GOLPES</h3><div class="desc">toque 1, 2 ou 3 vezes seguidas no botão</div>
       ${groups}
+      <h3>DEFESA &amp; MOVIMENTO</h3>
+      <div class="mrow"><span class="taps">◂▸</span><span class="mn">Segurar pra trás</span><span class="mh">GUARDA (bloqueia)</span></div>
+      <div class="mrow"><span class="taps">2×</span><span class="mn">Duplo-toque no lado do direcional</span><span class="mh">ESQUIVA (i-frames)</span></div>
       <button class="menu-btn close" id="moves-close">ENTENDI</button></div>`;
     $("moves-close").addEventListener("click", () => this.toggle(this.moves, false));
   }

@@ -123,11 +123,18 @@ let pendingEnd: { title: string; winner: string } | null = null;
 let net: NetLink | null = null;
 let netMode: "off" | "host" | "guest" = "off";
 let controlled: Fighter | null = null;
-let netSync = 0, netInWalk = 0, lastAppliedAtk = -1;
+let netSync = 0, netInWalk = 0, lastAppliedAtk = -1, lastDodge = -1;
 let myAtkId = 0;
+let myDodgeId = 0, myDodgeDir: 1 | -1 = 1;
 // fila dos últimos golpes do convidado; vai inteira em cada pacote de input.
 // reenviar a fila faz o golpe sobreviver a perda/coalescência de pacote (online).
 let atkQueue: { id: number; kind: Kind; tap: 1 | 2 | 3 }[] = [];
+
+// pacote de input do convidado (walk + golpes + esquiva). a guarda não precisa
+// ir aqui: é derivada do walk, que já está no pacote.
+function guestInputMsg() {
+  return { walk: inputWalk(), atks: atkQueue, dodgeId: myDodgeId, dodgeDir: myDodgeDir };
+}
 let netWinSide = "", netTitle = "", netWinner = "";
 
 const inputWalk = () => {
@@ -153,7 +160,7 @@ function startNetFight(isHost: boolean) {
   onlineMatch = true;
   ready = false; over = false; overT = 0; timeLeft = ROUND_TIME;
   prevPHp = prevCHp = MAX_HP;
-  netSync = 0; netInWalk = 0; lastAppliedAtk = -1; myAtkId = 0; atkQueue = [];
+  netSync = 0; netInWalk = 0; lastAppliedAtk = -1; lastDodge = -1; myAtkId = 0; myDodgeId = 0; atkQueue = [];
   netWinSide = ""; netTitle = ""; netWinner = "";
   net = new NetLink(roomCode, isHost);
   if (isHost) {
@@ -169,6 +176,8 @@ function startNetFight(isHost: boolean) {
           cpu.attack(a.kind as Kind, Number(a.tap) as 1 | 2 | 3, MOVES);
         }
       }
+      const dId = Number(i.dodgeId);
+      if (dId > lastDodge && cpu) { lastDodge = dId; cpu.dodge(Number(i.dodgeDir) as 1 | -1); }
     };
   } else {
     net.onState = applyHostState;
@@ -254,9 +263,10 @@ function netFightUpdate(dt: number) {
     netSync += dt;
     if (netSync > (net?.rtcOpen ? 0.033 : 0.05)) {
       netSync = 0;
-      net?.sendInput({ walk: inputWalk(), atks: atkQueue });
+      net?.sendInput(guestInputMsg());
     }
   }
+  ui.setCombo(controlled?.comboCount ?? 0);
 
   if (net) ui.setNet(net.rtcOpen ? "P2P" : net.connWarn() ? "SEM SINAL" : "ONLINE");
 
@@ -311,6 +321,7 @@ function update(dt: number) {
     (player.hp / MAX_HP) * 100, player.stamina,
     (cpu.hp / MAX_HP) * 100, cpu.stamina,
   );
+  ui.setCombo(player.comboCount);
 
   if (!over) {
     timeLeft -= dt;
@@ -523,21 +534,36 @@ function tryAttack(kind: Kind, tap: 1 | 2 | 3) {
     myAtkId++;
     atkQueue.push({ id: myAtkId, kind, tap });
     if (atkQueue.length > 8) atkQueue.shift();         // guarda só os últimos golpes
-    net?.sendInput({ walk: inputWalk(), atks: atkQueue }); // manda já, sem esperar o tick
+    net?.sendInput(guestInputMsg());                   // manda já, sem esperar o tick
     return;
   }
   controlled?.attack(kind, tap, MOVES);
+}
+
+// esquiva: duplo-toque na lateral do joystick (dir no mundo: +1 direita, -1 esquerda)
+function tryDodge(dir: 1 | -1) {
+  if (scene !== "fight" || !ready) return;
+  if (netMode === "guest") {
+    if (controlled?.dodge(dir)) {             // previsão local (esquiva sai na hora)
+      myDodgeId++; myDodgeDir = dir;
+      net?.sendInput(guestInputMsg());
+    }
+    return;
+  }
+  controlled?.dodge(dir);
 }
 
 let joyWalk = 0;
 ui.buildControls(
   (kind: Kind, tap) => tryAttack(kind, tap),
   (x) => { joyWalk = x; },
+  (dir) => tryDodge(dir),
 );
 
-// teclado: A/D ou setas = andar · J soco · K chute · L cotovelo
+// teclado: A/D ou setas = andar (2x = esquiva) · J soco · K chute · L cotovelo · segurar pra trás = guarda
 const keys = new Set<string>();
 const keyWalk = () => (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+let lastKeyDir: 1 | -1 = 1, lastKeyDirT = 0;
 const taps: Record<string, TapCounter> = {
   j: new TapCounter((c) => tryAttack("soco", c)),
   k: new TapCounter((c) => tryAttack("chute", c)),
@@ -545,7 +571,15 @@ const taps: Record<string, TapCounter> = {
 };
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
-  if (["a", "d", "arrowleft", "arrowright"].includes(k)) { keys.add(k); return; }
+  if (["a", "d", "arrowleft", "arrowright"].includes(k)) {
+    if (!e.repeat) {
+      const dir: 1 | -1 = k === "d" || k === "arrowright" ? 1 : -1;
+      const now = performance.now();
+      if (dir === lastKeyDir && now - lastKeyDirT < 280) tryDodge(dir); // duplo-toque = esquiva
+      lastKeyDir = dir; lastKeyDirT = now;
+    }
+    keys.add(k); return;
+  }
   if (!e.repeat && taps[k]) taps[k].hit();
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
