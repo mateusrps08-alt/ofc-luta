@@ -126,12 +126,14 @@ export class Fighter {
     if (this.ko) this.koT += dt;
   }
 
-  // aproxima pos.x do alvo de rede. mine=true → prevê localmente (responde na hora)
+  // aproxima pos.x do alvo de rede. mine=true → previsão local autoritária
   netInterp(dt: number, mine: boolean) {
     const dx = this.netTargetX - this.pos.x;
-    if (Math.abs(dx) > 80) { this.pos.x = this.netTargetX; return; } // teleporte proposital
+    if (Math.abs(dx) > 90) { this.pos.x = this.netTargetX; return; } // teleporte proposital
     if (mine) {
-      this.pos.x += this.walkX * this.walkSpeed * dt + dx * (1 - Math.exp(-3.5 * dt));
+      // anda pela previsão local; só corrige devagar quando diverge de verdade
+      this.pos.x += this.walkX * this.walkSpeed * dt;
+      if (Math.abs(dx) > 45) this.pos.x += dx * (1 - Math.exp(-2 * dt));
     } else {
       this.pos.x += dx * (1 - Math.exp(-12 * dt));
     }

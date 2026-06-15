@@ -127,7 +127,10 @@ let netSync = 0, netInWalk = 0, lastAppliedAtk = -1;
 let myAtkId = 0, myAtkKind: Kind = "soco", myAtkTap: 1 | 2 | 3 = 1;
 let netWinSide = "", netTitle = "", netWinner = "";
 
-const inputWalk = () => (joyWalk !== 0 ? joyWalk : keyWalk());
+const inputWalk = () => {
+  const w = joyWalk !== 0 ? joyWalk : keyWalk();
+  return Math.abs(w) < 0.12 ? 0 : w; // zona-morta: corta tremor do analógico
+};
 
 function netCleanup() {
   if (net) { net.destroy(); net = null; }
