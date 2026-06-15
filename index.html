@@ -33,12 +33,15 @@
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
       touch-action: none; font-family: var(--ui); color: var(--ink); user-select: none;
-      -webkit-user-select: none; }
+      -webkit-user-select: none; position: fixed; inset: 0; }
     button { font-family: var(--ui); cursor: pointer; }
-    #game { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; }
+    /* container de altura REAL (acompanha a barra do navegador no mobile) */
+    #app { position: fixed; left: 0; top: 0; width: 100%;
+      height: var(--app-h, 100dvh); overflow: hidden; }
+    #game { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 
     /* ---------- OVERLAYS ---------- */
-    .overlay { position: fixed; inset: 0; z-index: var(--z-overlay); display: none;
+    .overlay { position: absolute; inset: 0; z-index: var(--z-overlay); display: none;
       flex-direction: column; align-items: center; justify-content: center;
       padding: calc(var(--s5) + var(--safe-t)) var(--s5) calc(var(--s5) + var(--safe-b)); }
     .overlay.on { display: flex; animation: fade .3s var(--e-quart); }
@@ -109,7 +112,7 @@
     .sel-back:hover { color: var(--ink); border-color: #3d4d76; }
 
     /* ---------- HUD ---------- */
-    #hud { position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-hud); display: none;
+    #hud { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-hud); display: none;
       align-items: flex-start; gap: var(--s3); pointer-events: none;
       padding: calc(var(--s3) + var(--safe-t)) var(--s3) 0; }
     #hud.on { display: flex; }
@@ -141,7 +144,7 @@
     @keyframes pulse { 50% { opacity: .35; } }
 
     /* dano: brilho na borda */
-    #vignette { position: fixed; inset: 0; z-index: var(--z-fx); pointer-events: none; }
+    #vignette { position: absolute; inset: 0; z-index: var(--z-fx); pointer-events: none; }
     .flash { position: absolute; top: 0; bottom: 0; width: 40%; opacity: 0; }
     .flash.l { left: 0; background: linear-gradient(90deg, rgba(239,43,61,.55), transparent); }
     .flash.r { right: 0; background: linear-gradient(270deg, rgba(239,43,61,.55), transparent); }
@@ -149,7 +152,7 @@
     @keyframes flash { 0% { opacity: .9; } 100% { opacity: 0; } }
 
     /* ---------- CONTROLES ---------- */
-    #controls { position: fixed; bottom: 0; left: 0; right: 0; z-index: var(--z-controls); display: none;
+    #controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: var(--z-controls); display: none;
       align-items: flex-end; justify-content: space-between; gap: var(--s3);
       padding: var(--s4) clamp(10px, 3vw, 32px) calc(var(--s4) + var(--safe-b)); }
     #controls.on { display: flex; }
@@ -183,7 +186,7 @@
     @keyframes ring { from { box-shadow: inset 0 0 0 4px rgba(255,255,255,.9); }
       to { box-shadow: inset 0 0 0 16px rgba(255,255,255,0); } }
 
-    .topbtn { position: fixed; top: calc(var(--s2) + var(--safe-t)); z-index: var(--z-top);
+    .topbtn { position: absolute; top: calc(var(--s2) + var(--safe-t)); z-index: var(--z-top);
       width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line);
       background: rgba(10,14,24,.72); color: var(--ink); font-size: 16px; font-weight: 900;
       display: none; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
@@ -191,7 +194,7 @@
     #btn-info { right: var(--s3); }
 
     /* ---------- ROUND CALL ---------- */
-    #roundcall { position: fixed; inset: 0; z-index: var(--z-round); display: none; pointer-events: none;
+    #roundcall { position: absolute; inset: 0; z-index: var(--z-round); display: none; pointer-events: none;
       align-items: center; justify-content: center; }
     #roundcall.on { display: flex; }
     #roundcall .rc { font-family: var(--display); font-size: clamp(52px, 17vw, 132px);
@@ -278,18 +281,20 @@
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
-  <div id="vignette"><div class="flash l" id="fl-l"></div><div class="flash r" id="fl-r"></div></div>
-  <div id="hud"></div>
-  <button class="topbtn" id="btn-info" aria-label="Lista de golpes">?</button>
-  <div id="controls"></div>
-  <div id="roundcall"></div>
-  <div class="overlay" id="menu"></div>
-  <div class="overlay" id="select"></div>
-  <div class="overlay" id="career"></div>
-  <div class="overlay" id="online"></div>
-  <div class="overlay" id="ko"></div>
-  <div class="overlay" id="moves"></div>
+  <div id="app">
+    <canvas id="game"></canvas>
+    <div id="vignette"><div class="flash l" id="fl-l"></div><div class="flash r" id="fl-r"></div></div>
+    <div id="hud"></div>
+    <button class="topbtn" id="btn-info" aria-label="Lista de golpes">?</button>
+    <div id="controls"></div>
+    <div id="roundcall"></div>
+    <div class="overlay" id="menu"></div>
+    <div class="overlay" id="select"></div>
+    <div class="overlay" id="career"></div>
+    <div class="overlay" id="online"></div>
+    <div class="overlay" id="ko"></div>
+    <div class="overlay" id="moves"></div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -26,15 +26,25 @@ const ROUND_TIME = 90;
 
 let W = 0, H = 0, DPR = 1, groundY = 0;
 function resize() {
+  const vv = window.visualViewport;
   DPR = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
-  canvas.width = W * DPR; canvas.height = H * DPR;
+  W = Math.round(vv?.width ?? window.innerWidth);
+  H = Math.round(vv?.height ?? window.innerHeight);
+  // altura real (descontando a barra do navegador) pro container #app
+  document.documentElement.style.setProperty("--app-h", H + "px");
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   groundY = H * 0.8;
   if (player && cpu) placeFighters();
   placeDemo();
 }
 window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 120));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", resize);
+  window.visualViewport.addEventListener("scroll", resize);
+}
 
 // atract mode: dois lutadores treinando atrás do menu
 let demoA: Fighter | null = null, demoB: Fighter | null = null;
