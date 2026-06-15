@@ -123,7 +123,7 @@ let pendingEnd: { title: string; winner: string } | null = null;
 let net: NetLink | null = null;
 let netMode: "off" | "host" | "guest" = "off";
 let controlled: Fighter | null = null;
-let netSync = 0, netInWalk = 0, lastAppliedAtk = -1, lastDodge = -1;
+let netSync = 0, netInWalk = 0, netInGuard = false, lastAppliedAtk = -1, lastDodge = -1;
 let myAtkId = 0;
 let myDodgeId = 0, myDodgeDir: 1 | -1 = 1;
 // fila dos últimos golpes do convidado; vai inteira em cada pacote de input.
@@ -133,7 +133,7 @@ let atkQueue: { id: number; kind: Kind; tap: 1 | 2 | 3 }[] = [];
 // pacote de input do convidado (walk + golpes + esquiva). a guarda não precisa
 // ir aqui: é derivada do walk, que já está no pacote.
 function guestInputMsg() {
-  return { walk: inputWalk(), atks: atkQueue, dodgeId: myDodgeId, dodgeDir: myDodgeDir };
+  return { walk: inputWalk(), guard: guardHeld ? 1 : 0, atks: atkQueue, dodgeId: myDodgeId, dodgeDir: myDodgeDir };
 }
 let netWinSide = "", netTitle = "", netWinner = "";
 
@@ -166,6 +166,7 @@ function startNetFight(isHost: boolean) {
   if (isHost) {
     net.onInput = (i) => {
       netInWalk = Number(i.walk) || 0;
+      netInGuard = Number(i.guard) === 1;
       // aplica todo golpe ainda não visto. a fila chega repetida a cada pacote,
       // então mesmo perdendo pacote o host recupera o golpe que faltou.
       const atks = Array.isArray(i.atks) ? (i.atks as { id: number; kind: Kind; tap: 1 | 2 | 3 }[]) : [];
@@ -235,6 +236,8 @@ function netFightUpdate(dt: number) {
     if (!feel.frozen()) {
       player.walkX = inputWalk();
       cpu.walkX = netInWalk;
+      player.guardHeld = guardHeld;     // guarda do host (botão local)
+      cpu.guardHeld = netInGuard;       // guarda do convidado (vem no input)
       const arenaMin = WORLD_W * 0.1, arenaMax = WORLD_W * 0.9, minSep = 95;
       player.setBounds(arenaMin, cpu.pos.x - minSep);
       cpu.setBounds(player.pos.x + minSep, arenaMax);
@@ -256,6 +259,7 @@ function netFightUpdate(dt: number) {
     // meu lutador (cpu) anda por previsão local (responde na hora); o oponente
     // (player) segue o estado do host. assim o convidado se move na própria tela.
     cpu.walkX = inputWalk();
+    cpu.guardHeld = guardHeld;          // guarda local (previsão); o oponente vem do estado
     player.tickDisplay(dt); cpu.tickDisplay(dt);
     player.netInterp(dt, false); cpu.netInterp(dt, true);
     cpu.pos.x = Math.max(WORLD_W * 0.1, Math.min(WORLD_W * 0.9, cpu.pos.x)); // não foge da arena
@@ -302,6 +306,7 @@ function update(dt: number) {
 
   // input de movimento: joystick tem prioridade, senão teclado
   player.walkX = joyWalk !== 0 ? joyWalk : keyWalk();
+  player.guardHeld = guardHeld;
 
   // limites do octógono + não atravessar o oponente
   const arenaMin = WORLD_W * 0.1, arenaMax = WORLD_W * 0.9, minSep = 95;
@@ -554,10 +559,12 @@ function tryDodge(dir: 1 | -1) {
 }
 
 let joyWalk = 0;
+let guardHeld = false;
 ui.buildControls(
   (kind: Kind, tap) => tryAttack(kind, tap),
   (x) => { joyWalk = x; },
   (dir) => tryDodge(dir),
+  (held) => { guardHeld = held; },
 );
 
 // teclado: A/D ou setas = andar (2x = esquiva) · J soco · K chute · L cotovelo · segurar pra trás = guarda
@@ -571,6 +578,7 @@ const taps: Record<string, TapCounter> = {
 };
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
+  if (k === " " || k === "s") { guardHeld = true; e.preventDefault(); return; } // defesa (segurar)
   if (["a", "d", "arrowleft", "arrowright"].includes(k)) {
     if (!e.repeat) {
       const dir: 1 | -1 = k === "d" || k === "arrowright" ? 1 : -1;
@@ -582,7 +590,11 @@ window.addEventListener("keydown", (e) => {
   }
   if (!e.repeat && taps[k]) taps[k].hit();
 });
-window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  if (k === " " || k === "s") { guardHeld = false; return; }
+  keys.delete(k);
+});
 
 resize();
 ui.scene("menu");

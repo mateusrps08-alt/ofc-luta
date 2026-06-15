@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.17 · BETA</div>`;
+      <div class="ver">v0.18 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
@@ -94,21 +94,38 @@ export class UI {
     el.classList.remove("lit"); void el.offsetWidth; el.classList.add("lit");
   }
 
-  buildControls(onAttack: (kind: Kind, tap: 1 | 2 | 3) => void, onMove: (x: number) => void, onDodge: (dir: 1 | -1) => void) {
+  buildControls(
+    onAttack: (kind: Kind, tap: 1 | 2 | 3) => void,
+    onMove: (x: number) => void,
+    onDodge: (dir: 1 | -1) => void,
+    onGuard: (held: boolean) => void,
+  ) {
     const atk = (k: Kind, name: string, legend: string) =>
       `<button class="atk ${CLS[k]}" id="atk-${CLS[k]}" aria-label="${name}">
         <span class="ring"></span><span class="ic">${ICON[k]}</span>
         <span class="nm">${name}</span><span class="legend">${legend}</span></button>`;
     this.controls.innerHTML = `
       <div class="joy" id="joy"><div class="knob" id="joy-knob"></div></div>
-      <div class="atk-cluster">
-        ${atk("soco", "SOCO", "1·2·3")}${atk("chute", "CHUTE", "1·2·3")}${atk("cotovelada", "COTOVELO", "1·2·3")}
+      <div class="right-side">
+        <button class="atk guard" id="atk-guard" aria-label="Defesa (segure)">
+          <span class="ic">🛡️</span><span class="nm">DEFESA</span></button>
+        <div class="atk-cluster">
+          ${atk("soco", "SOCO", "1·2·3")}${atk("chute", "CHUTE", "1·2·3")}${atk("cotovelada", "COTOVELO", "1·2·3")}
+        </div>
       </div>`;
 
     const wire = (k: Kind) => {
       new MultiTap($(`atk-${CLS[k]}`), (c) => { this.litAttack(k); onAttack(k, c); });
     };
     wire("soco"); wire("chute"); wire("cotovelada");
+
+    // botão de defesa: segura pra erguer a guarda, solta pra baixar
+    const gb = $("atk-guard");
+    const setGuard = (on: boolean) => { onGuard(on); gb.classList.toggle("held", on); };
+    gb.addEventListener("pointerdown", (e) => { e.preventDefault(); setGuard(true); });
+    gb.addEventListener("pointerup", () => setGuard(false));
+    gb.addEventListener("pointercancel", () => setGuard(false));
+    gb.addEventListener("lostpointercapture", () => setGuard(false));
 
     this.wireJoystick(onMove, onDodge);
   }
@@ -251,7 +268,7 @@ export class UI {
       <h3>GOLPES</h3><div class="desc">toque 1, 2 ou 3 vezes seguidas no botão</div>
       ${groups}
       <h3>DEFESA &amp; MOVIMENTO</h3>
-      <div class="mrow"><span class="taps">◂▸</span><span class="mn">Segurar pra trás</span><span class="mh">GUARDA (bloqueia)</span></div>
+      <div class="mrow"><span class="taps">🛡️</span><span class="mn">Segurar o botão DEFESA</span><span class="mh">GUARDA (bloqueia)</span></div>
       <div class="mrow"><span class="taps">2×</span><span class="mn">Duplo-toque no lado do direcional</span><span class="mh">ESQUIVA (i-frames)</span></div>
       <button class="menu-btn close" id="moves-close">ENTENDI</button></div>`;
     $("moves-close").addEventListener("click", () => this.toggle(this.moves, false));
