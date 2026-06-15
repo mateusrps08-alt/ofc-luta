@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ef2b3d"/>
+      <stop offset="1" stop-color="#8e0f1b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#0c0f1a"/>
+  <rect x="40" y="40" width="432" height="432" rx="72" fill="url(#bg)"/>
+  <text x="256" y="270" font-family="Arial Black, Arial, sans-serif" font-weight="900"
+        font-size="170" fill="#fff" text-anchor="middle" letter-spacing="-6">OFC</text>
+  <text x="256" y="360" font-family="Arial, sans-serif" font-weight="800"
+        font-size="62" fill="#0c0f1a" text-anchor="middle" letter-spacing="14">LUTA</text>
+</svg>

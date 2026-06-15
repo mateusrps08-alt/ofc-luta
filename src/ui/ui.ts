@@ -38,7 +38,7 @@ export class UI {
         <button class="menu-btn" id="btn-online">ONLINE <span class="chev">🌐</span></button>
         <button class="menu-btn ghost" id="btn-career">CARREIRA <span class="chev">🏆</span></button>
       </div>
-      <div class="ver">v0.3 · BETA</div>`;
+      <div class="ver">v0.4 · BETA</div>`;
     $("btn-play").addEventListener("click", onPlay);
     $("btn-online").addEventListener("click", onOnline);
     $("btn-career").addEventListener("click", onCareer);
@@ -73,8 +73,8 @@ export class UI {
       </div>`;
     };
     this.select.innerHTML = `
-      <div class="sel-head"><h2>ESCOLHA SEU LUTADOR</h2><p>a CPU pega outro</p></div>
-      <div class="cards">${ROSTER.map(card).join("")}</div>
+      <div class="sel-head"><h2>ESCOLHA SEU LUTADOR</h2><p>arraste pra ver · toque pra escolher</p></div>
+      <div class="cards"><i class="csp"></i>${ROSTER.map(card).join("")}<i class="csp"></i></div>
       <button class="sel-back" id="sel-back">◂ VOLTAR</button>`;
     const choose = (el: HTMLElement) => {
       this.select.querySelectorAll(".card").forEach((c) => c.classList.remove("sel"));
